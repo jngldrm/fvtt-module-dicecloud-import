@@ -1,0 +1,25 @@
+{
+  "id": "dicecloud-import",
+  "title": "DiceCloud Import",
+  "description": "A module to import DiceCloud characters into Foundry VTT compendia",
+  "authors": [
+    {
+      "name": "Fabian Kantereit",
+      "email": "fabian.kantereit@tsaro.io",
+      "url": "https://github.com/Fabi2607"
+    }
+  ],
+  "version": "0.1.0",
+  "minimumCoreVersion": "0.7.0",
+  "compatibleCoreVersion": "0.7.9",
+  "system": "dnd5e",
+  "styles": [
+    "styles/style.css"
+  ],
+  "scripts": [
+    "scripts/dicecloud-import.js"
+  ],
+  "url": "https://github.com/RashThePay/fvtt-module-dicecloud-import/",
+  "manifest": "https://raw.githubusercontent.com/RashThePay/fvtt-module-dicecloud-import/refs/heads/main/module.json",
+  "download": "https://raw.githubusercontent.com/RashThePay/fvtt-module-dicecloud-import/refs/heads/main/dicecloud-import.zip"
+}
