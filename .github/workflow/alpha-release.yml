@@ -1,0 +1,94 @@
+name: Alpha Release
+
+on:
+  push:
+    branches:
+      - develop
+
+env:
+  node_version: 20
+
+jobs:
+  alpha-build:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.node_version }}
+
+      - name: Install dependencies (if present)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          fi
+
+      - name: Prepare dist folder
+        run: |
+          rm -rf dist
+          mkdir dist
+          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' ./ ./dist/
+
+      - name: Read base module metadata
+        id: module
+        run: |
+          MANIFEST="dist/module.json"
+          if [ -f ./get-version.js ]; then
+            VERSION=$(node ./get-version.js "$MANIFEST")
+          else
+            VERSION=$(jq -r '.version' "$MANIFEST")
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Generate alpha version
+        id: alpha-version
+        run: |
+          BASE_VERSION="${{ steps.module.outputs.version }}"
+          TIMESTAMP=$(date -u +"%Y%m%d%H%M")
+          ALPHA_VERSION="${BASE_VERSION}-alpha.${TIMESTAMP}"
+          echo "version=$ALPHA_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Alpha version: $ALPHA_VERSION"
+
+      - name: Update module manifest for alpha release
+        run: |
+          jq '.version = "${{ steps.alpha-version.outputs.version }}"' dist/module.json > dist/module.json.tmp && mv dist/module.json.tmp dist/module.json
+          jq '.manifest = "https://github.com/${{ github.repository }}/releases/download/${{ steps.alpha-version.outputs.version }}/module.json" | .download = "https://github.com/${{ github.repository }}/releases/download/${{ steps.alpha-version.outputs.version }}/module.zip"' dist/module.json > dist/module.json.tmp && mv dist/module.json.tmp dist/module.json
+
+      - name: Capture Foundry compatibility
+        id: compatibility
+        run: |
+          MIN=$(jq -r '.compatibility.minimum // empty' dist/module.json)
+          MAX=$(jq -r '.compatibility.maximum // empty' dist/module.json)
+          VERIFIED=$(jq -r '.compatibility.verified // empty' dist/module.json)
+          echo "minimum=$MIN" >> "$GITHUB_OUTPUT"
+          echo "maximum=$MAX" >> "$GITHUB_OUTPUT"
+          echo "verified=$VERIFIED" >> "$GITHUB_OUTPUT"
+
+      - name: Zip alpha release
+        working-directory: dist
+        run: zip -r ../module.zip ./*
+
+      - name: Create alpha pre-release
+        id: create-alpha-release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: false
+          tag: ${{ steps.alpha-version.outputs.version }}
+          name: "Alpha ${{ steps.alpha-version.outputs.version }} 🧪"
+          artifacts: "./module.zip, ./dist/module.json"
+          draft: false
+          prerelease: true
+          generateReleaseNotes: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Alpha release created
+        run: |
+          echo "🧪 Alpha release created: ${{ steps.alpha-version.outputs.version }}"
+          echo "📦 Download URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.alpha-version.outputs.version }}/module.zip"
+          echo "📋 Manifest URL: https://github.com/${{ github.repository }}/releases/download/${{ steps.alpha-version.outputs.version }}/module.json"

@@ -1,0 +1,111 @@
+name: Stable Release
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  node_version: 20
+
+jobs:
+  stable-build:
+    permissions:
+      contents: write
+    env:
+      FOUNDRY_RELEASE_TOKEN: ${{ secrets.FOUNDRY_RELEASE_TOKEN }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.node_version }}
+
+      - name: Install dependencies (if present)
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          fi
+
+      - name: Prepare dist folder
+        run: |
+          rm -rf dist
+          mkdir dist
+          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' ./ ./dist/
+
+      - name: Read module metadata
+        id: module
+        run: |
+          MANIFEST="dist/module.json"
+          if [ -f ./get-version.js ]; then
+            VERSION=$(node ./get-version.js "$MANIFEST")
+          else
+            VERSION=$(jq -r '.version' "$MANIFEST")
+          fi
+          MODULE_ID=$(jq -r '.id' "$MANIFEST")
+          MIN=$(jq -r '.compatibility.minimum // empty' "$MANIFEST")
+          MAX=$(jq -r '.compatibility.maximum // empty' "$MANIFEST")
+          VERIFIED=$(jq -r '.compatibility.verified // empty' "$MANIFEST")
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "module_id=$MODULE_ID" >> "$GITHUB_OUTPUT"
+          echo "minimum=$MIN" >> "$GITHUB_OUTPUT"
+          echo "maximum=$MAX" >> "$GITHUB_OUTPUT"
+          echo "verified=$VERIFIED" >> "$GITHUB_OUTPUT"
+
+      - name: Configure release URLs
+        id: release-urls
+        run: |
+          TAG="v${{ steps.module.outputs.version }}"
+          MANIFEST_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/module.json"
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/releases/download/${TAG}/module.zip"
+          NOTES_URL="https://github.com/${{ github.repository }}/releases/tag/${TAG}"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "manifest_url=$MANIFEST_URL" >> "$GITHUB_OUTPUT"
+          echo "download_url=$DOWNLOAD_URL" >> "$GITHUB_OUTPUT"
+          echo "notes_url=$NOTES_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Update module manifest URLs
+        run: |
+          jq '.manifest = "${{ steps.release-urls.outputs.manifest_url }}" | .download = "${{ steps.release-urls.outputs.download_url }}"' dist/module.json > dist/module.json.tmp && mv dist/module.json.tmp dist/module.json
+
+      - name: Zip stable release
+        working-directory: dist
+        run: zip -r ../module.zip ./*
+
+      - name: Create GitHub release
+        id: create-release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: ${{ steps.release-urls.outputs.tag }}
+          name: "Release ${{ steps.module.outputs.version }}"
+          generateReleaseNotes: true
+          artifacts: "./module.zip, ./dist/module.json"
+          draft: false
+          prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to Foundry Package Registry
+        if: ${{ env.FOUNDRY_RELEASE_TOKEN != '' }}
+        env:
+          FOUNDRY_RELEASE_TOKEN: ${{ env.FOUNDRY_RELEASE_TOKEN }}
+          FOUNDRY_PACKAGE_ID: ${{ steps.module.outputs.module_id }}
+          MODULE_VERSION: ${{ steps.module.outputs.version }}
+          MANIFEST_URL: ${{ steps.release-urls.outputs.manifest_url }}
+          NOTES_URL: ${{ steps.release-urls.outputs.notes_url }}
+          MINIMUM_COMPATIBILITY: ${{ steps.module.outputs.minimum }}
+          VERIFIED_COMPATIBILITY: ${{ steps.module.outputs.verified }}
+          MAXIMUM_COMPATIBILITY: ${{ steps.module.outputs.maximum }}
+        run: node ./create-foundry-release.js
+
+      - name: Stable release created
+        run: |
+          echo "🚀 Stable release created: ${{ steps.module.outputs.version }}"
+          echo "📦 Download URL: ${{ steps.release-urls.outputs.download_url }}"
+          echo "📋 Manifest URL: ${{ steps.release-urls.outputs.manifest_url }}"
