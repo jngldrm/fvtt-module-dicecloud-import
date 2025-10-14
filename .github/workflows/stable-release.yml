@@ -35,21 +35,21 @@ jobs:
         run: |
           rm -rf dist
           mkdir dist
-          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' ./ ./dist/
+          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' --exclude='dicecloud-import.zip' ./ ./dist/
 
       - name: Read module metadata
         id: module
         run: |
           MANIFEST="dist/module.json"
-          if [ -f ./get-version.js ]; then
-            VERSION=$(node ./get-version.js "$MANIFEST")
+          if [ -f .github/workflows/get-version.js ]; then
+            VERSION=$(node .github/workflows/get-version.js "$MANIFEST")
           else
             VERSION=$(jq -r '.version' "$MANIFEST")
           fi
           MODULE_ID=$(jq -r '.id' "$MANIFEST")
-          MIN=$(jq -r '.compatibility.minimum // empty' "$MANIFEST")
-          MAX=$(jq -r '.compatibility.maximum // empty' "$MANIFEST")
-          VERIFIED=$(jq -r '.compatibility.verified // empty' "$MANIFEST")
+          MIN=$(jq -r '.compatibility.minimum // .minimumCoreVersion // empty' "$MANIFEST")
+          MAX=$(jq -r '.compatibility.maximum // .compatibleCoreVersion // .maximumCoreVersion // empty' "$MANIFEST")
+          VERIFIED=$(jq -r '.compatibility.verified // .compatibleCoreVersion // empty' "$MANIFEST")
 
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "module_id=$MODULE_ID" >> "$GITHUB_OUTPUT"
@@ -102,7 +102,7 @@ jobs:
           MINIMUM_COMPATIBILITY: ${{ steps.module.outputs.minimum }}
           VERIFIED_COMPATIBILITY: ${{ steps.module.outputs.verified }}
           MAXIMUM_COMPATIBILITY: ${{ steps.module.outputs.maximum }}
-        run: node ./create-foundry-release.js
+        run: node .github/workflows/create-foundry-release.js
 
       - name: Stable release created
         run: |

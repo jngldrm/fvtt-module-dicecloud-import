@@ -33,14 +33,14 @@ jobs:
         run: |
           rm -rf dist
           mkdir dist
-          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' ./ ./dist/
+          rsync -av --exclude='.git' --exclude='.github' --exclude='dist' --exclude='node_modules' --exclude='dicecloud-import.zip' ./ ./dist/
 
       - name: Read base module metadata
         id: module
         run: |
           MANIFEST="dist/module.json"
-          if [ -f ./get-version.js ]; then
-            VERSION=$(node ./get-version.js "$MANIFEST")
+          if [ -f .github/workflows/get-version.js ]; then
+            VERSION=$(node .github/workflows/get-version.js "$MANIFEST")
           else
             VERSION=$(jq -r '.version' "$MANIFEST")
           fi
@@ -63,9 +63,9 @@ jobs:
       - name: Capture Foundry compatibility
         id: compatibility
         run: |
-          MIN=$(jq -r '.compatibility.minimum // empty' dist/module.json)
-          MAX=$(jq -r '.compatibility.maximum // empty' dist/module.json)
-          VERIFIED=$(jq -r '.compatibility.verified // empty' dist/module.json)
+          MIN=$(jq -r '.compatibility.minimum // .minimumCoreVersion // empty' dist/module.json)
+          MAX=$(jq -r '.compatibility.maximum // .compatibleCoreVersion // .maximumCoreVersion // empty' dist/module.json)
+          VERIFIED=$(jq -r '.compatibility.verified // .compatibleCoreVersion // empty' dist/module.json)
           echo "minimum=$MIN" >> "$GITHUB_OUTPUT"
           echo "maximum=$MAX" >> "$GITHUB_OUTPUT"
           echo "verified=$VERIFIED" >> "$GITHUB_OUTPUT"

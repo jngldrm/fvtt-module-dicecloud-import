@@ -12,6 +12,18 @@ function missingEnv(name) {
   console.warn(`[Foundry Release] Missing required environment variable: ${name}`);
 }
 
+function toNullable(value) {
+  if (value == null) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return value.trim() === "" ? null : value;
+  }
+
+  return value;
+}
+
 async function createAndPushFoundryRelease() {
   if (!RELEASE_TOKEN) {
     console.log("[Foundry Release] No FOUNDRY_RELEASE_TOKEN provided, skipping Foundry Hub publication.");
@@ -42,11 +54,11 @@ async function createAndPushFoundryRelease() {
     release: {
       version: MODULE_VERSION,
       manifest: MANIFEST_URL,
-      notes: NOTES_URL ?? null,
+      notes: toNullable(NOTES_URL),
       compatibility: {
-        minimum: MINIMUM_COMPATIBILITY ?? null,
-        verified: VERIFIED_COMPATIBILITY ?? null,
-        maximum: MAXIMUM_COMPATIBILITY ?? null,
+        minimum: toNullable(MINIMUM_COMPATIBILITY),
+        verified: toNullable(VERIFIED_COMPATIBILITY),
+        maximum: toNullable(MAXIMUM_COMPATIBILITY),
       },
     },
   };
