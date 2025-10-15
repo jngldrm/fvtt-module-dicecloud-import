@@ -1,0 +1,37 @@
+<form class="dicecloud-import-settings-form">
+    <p>Select the compendiums that should be searched when importing spells and features.</p>
+    <table class="dicecloud-import-settings-table">
+        <thead>
+            <tr>
+                <th>Compendium</th>
+                <th>Use for Spells</th>
+                <th>Use for Features</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{#if packs.length}}
+                {{#each packs}}
+                    <tr>
+                        <td>
+                            <strong>{{title}}</strong><br>
+                            <small>{{collection}}</small>
+                        </td>
+                        <td class="centered">
+                            <input type="checkbox" name="spellsCompendia" value="{{collection}}" {{#if spellSelected}}checked{{/if}}>
+                        </td>
+                        <td class="centered">
+                            <input type="checkbox" name="featuresCompendia" value="{{collection}}" {{#if featureSelected}}checked{{/if}}>
+                        </td>
+                    </tr>
+                {{/each}}
+            {{else}}
+                <tr>
+                    <td colspan="3">No Item compendiums available.</td>
+                </tr>
+            {{/if}}
+        </tbody>
+    </table>
+    <footer class="dicecloud-import-settings-footer">
+        <button type="submit" class="dicecloud-settings-save"><i class="fas fa-save"></i> Save</button>
+    </footer>
+</form>

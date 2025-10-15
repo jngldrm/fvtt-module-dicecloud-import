@@ -15,6 +15,19 @@ const Noop = () => undefined;
 
 // Main module class
 class DiceCloudImporter extends Application {
+    static moduleId = "dicecloud-import";
+    static defaultSpellCompendia = [
+        "Dynamic-Effects-SRD.DAE SRD Midi-collection",
+        "Dynamic-Effects-SRD.DAE SRD Spells",
+        "dnd5e.spells",
+        () => `world.ddb-${game.world.name}-spells`,
+    ];
+    static defaultFeatureCompendia = [
+        "Dynamic-Effects-SRD.DAE SRD Feats",
+        "dnd5e.classfeatures",
+        "dnd5e.races",
+    ];
+
     static normalizeCharacter(rawCharacter) {
         if (rawCharacter?.character && rawCharacter?.collections) {
             return rawCharacter;
@@ -408,6 +421,65 @@ class DiceCloudImporter extends Application {
         return Array.from(candidates);
     }
 
+    static resolveDefaultCompendia(defaults) {
+        return defaults
+            .map((entry) => typeof entry === "function" ? entry() : entry)
+            .filter((id) => typeof id === "string" && id.length > 0);
+    }
+
+    static registerSettings() {
+        if (!game?.settings) {
+            return;
+        }
+
+        const defaults = {
+            spellsCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultSpellCompendia)),
+            featuresCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultFeatureCompendia)),
+        };
+
+        for (const [key, defaultValue] of Object.entries(defaults)) {
+            if (!game.settings.settings.has(`${this.moduleId}.${key}`)) {
+                game.settings.register(this.moduleId, key, {
+                    scope: "world",
+                    config: false,
+                    type: String,
+                    default: defaultValue,
+                });
+            }
+        }
+    }
+
+    static getCompendiumSetting(key, defaults) {
+        if (!game?.settings) {
+            return Array.isArray(defaults) ? [...defaults] : [];
+        }
+        const stored = game.settings.get(this.moduleId, key);
+        if (!stored) {
+            return Array.isArray(defaults) ? [...defaults] : [];
+        }
+        try {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+                return parsed.filter((id) => typeof id === "string" && id.length > 0);
+            }
+        } catch (err) {
+            console.warn(`Failed to parse DiceCloud setting ${key}`, err);
+        }
+        return Array.isArray(defaults) ? [...defaults] : [];
+    }
+
+    static setCompendiumSetting(key, values) {
+        if (!game?.settings) {
+            return;
+        }
+        const unique = Array.from(new Set((Array.isArray(values) ? values : []).filter((id) => typeof id === "string" && id.length > 0)));
+        game.settings.set(this.moduleId, key, JSON.stringify(unique));
+    }
+
+    static openSettings() {
+        new DiceCloudImporterSettings().render(true);
+    }
+
     static get defaultOptions() {
         const options = super.defaultOptions;
         options.id = "dicecloudimporter";
@@ -427,6 +499,10 @@ class DiceCloudImporter extends Application {
             let dicecloudJSON = html.find('[name=dicecloud-json]').val();
             let updateBool = html.find('[name=updateButton]').is(':checked');
             await DiceCloudImporter.parseCharacter(dicecloudJSON, updateBool)
+        });
+        html.find(".dicecloud-settings").click(ev => {
+            ev.preventDefault();
+            DiceCloudImporter.openSettings();
         });
         this.close();
     }
@@ -827,12 +903,9 @@ class DiceCloudImporter extends Application {
     }
 
     static async parseSpells(actor, parsedCharacter) {
-        const compendiums = await this.prepareCompendiums([
-            "Dynamic-Effects-SRD.DAE SRD Midi-collection",
-            "Dynamic-Effects-SRD.DAE SRD Spells",
-            "dnd5e.spells",
-            `world.ddb-${game.world.name}-spells`
-        ]);
+        const defaultSpells = this.resolveDefaultCompendia(this.defaultSpellCompendia);
+        const spellPackIds = this.getCompendiumSetting("spellsCompendia", defaultSpells);
+        const compendiums = await this.prepareCompendiums(spellPackIds);
 
         const spellSchoolTranslation = new Map([
             ["Abjuration", "abj"],
@@ -944,11 +1017,9 @@ class DiceCloudImporter extends Application {
     }
 
     static async parseFeatures(actor, parsedCharacter) {
-        const compendiums = await this.prepareCompendiums([
-            "Dynamic-Effects-SRD.DAE SRD Feats",
-            "dnd5e.classfeatures",
-            "dnd5e.races",
-        ]);
+        const defaultFeatures = this.resolveDefaultCompendia(this.defaultFeatureCompendia);
+        const featurePackIds = this.getCompendiumSetting("featuresCompendia", defaultFeatures);
+        const compendiums = await this.prepareCompendiums(featurePackIds);
 
         const ignore_class_features = [
             "Base Ability Scores",
@@ -1271,3 +1342,68 @@ class DiceCloudImporter extends Application {
         return skills;
     }
 }
+
+class DiceCloudImporterSettings extends FormApplication {
+    static get defaultOptions() {
+        const options = super.defaultOptions;
+        options.id = "dicecloud-import-settings";
+        options.template = "modules/dicecloud-import/templates/dicecloud_import_settings.html";
+        options.title = "DiceCloud Import Settings";
+        options.width = 500;
+        options.height = "auto";
+        options.resizable = true;
+        options.classes = options.classes ?? [];
+        options.classes.push("dicecloud-import-settings");
+        return options;
+    }
+
+    getData() {
+        const spellSelection = new Set(DiceCloudImporter.getCompendiumSetting(
+            "spellsCompendia",
+            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpellCompendia)
+        ));
+        const featureSelection = new Set(DiceCloudImporter.getCompendiumSetting(
+            "featuresCompendia",
+            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultFeatureCompendia)
+        ));
+
+        const packs = Array.from(game.packs.values())
+            .filter((pack) => pack.metadata?.type === "Item")
+            .map((pack) => ({
+                collection: pack.collection,
+                title: pack.title ?? pack.metadata?.label ?? pack.collection,
+                metadata: pack.metadata,
+                spellSelected: spellSelection.has(pack.collection),
+                featureSelected: featureSelection.has(pack.collection),
+            }))
+            .sort((a, b) => a.title.localeCompare(b.title));
+
+        return {
+            packs,
+        };
+    }
+
+    async _updateObject(event, formData) {
+        const normalize = (value) => {
+            if (!value) {
+                return [];
+            }
+            if (Array.isArray(value)) {
+                return value.filter(Boolean);
+            }
+            return [value];
+        };
+
+        const spellPacks = normalize(formData.spellsCompendia);
+        const featurePacks = normalize(formData.featuresCompendia);
+
+        DiceCloudImporter.setCompendiumSetting("spellsCompendia", spellPacks);
+        DiceCloudImporter.setCompendiumSetting("featuresCompendia", featurePacks);
+
+        ui.notifications?.info?.("DiceCloud Import settings saved");
+    }
+}
+
+Hooks.once("init", () => {
+    DiceCloudImporter.registerSettings();
+});

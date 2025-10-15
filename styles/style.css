@@ -12,3 +12,25 @@ button.import-cd {
 #cd-importer .window-content {
     overflow: unset
 }
+
+.dicecloud-import-settings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.5rem;
+}
+
+.dicecloud-import-settings-table th,
+.dicecloud-import-settings-table td {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    padding: 6px;
+    vertical-align: top;
+}
+
+.dicecloud-import-settings-table td.centered {
+    text-align: center;
+}
+
+.dicecloud-import-settings-footer {
+    margin-top: 0.75rem;
+    text-align: right;
+}
