@@ -104,8 +104,37 @@ jobs:
           MAXIMUM_COMPATIBILITY: ${{ steps.module.outputs.maximum }}
         run: node .github/workflows/create-foundry-release.js
 
+      - name: Preserve versioned artifact
+        run: mv module.zip module-v${{ steps.module.outputs.version }}.zip
+
+      - name: Prepare latest artifact
+        run: |
+          rm -rf dist-latest
+          mkdir dist-latest
+          rsync -av dist/ dist-latest/
+          jq '.manifest = "https://github.com/${{ github.repository }}/releases/download/latest/module.json" | .download = "https://github.com/${{ github.repository }}/releases/download/latest/module.zip"' dist-latest/module.json > dist-latest/module.json.tmp && mv dist-latest/module.json.tmp dist-latest/module.json
+
+      - name: Zip latest artifact
+        working-directory: dist-latest
+        run: zip -r ../module.zip ./*
+
+      - name: Update latest GitHub release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          tag: latest
+          name: "Latest Release"
+          artifacts: "./module.zip, ./dist-latest/module.json"
+          draft: false
+          prerelease: false
+          generateReleaseNotes: false
+          body: "Latest stable release for version ${{ steps.module.outputs.version }}."
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Stable release created
         run: |
           echo "🚀 Stable release created: ${{ steps.module.outputs.version }}"
           echo "📦 Download URL: ${{ steps.release-urls.outputs.download_url }}"
           echo "📋 Manifest URL: ${{ steps.release-urls.outputs.manifest_url }}"
+          echo "🔁 Latest Download URL: https://github.com/${{ github.repository }}/releases/download/latest/module.zip"
+          echo "🔁 Latest Manifest URL: https://github.com/${{ github.repository }}/releases/download/latest/module.json"
