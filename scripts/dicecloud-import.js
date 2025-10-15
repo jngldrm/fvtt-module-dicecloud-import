@@ -186,8 +186,8 @@ class DiceCloudImporter extends Application {
             prepared: spell?.alwaysPrepared ? "always" : (spell?.prepared ? "prepared" : "unprepared"),
         }));
 
-        const raceFolder = properties.find((prop) => Array.isArray(prop?.libraryTags) && prop.libraryTags.includes("race"));
-        const backgroundFolder = properties.find((prop) => Array.isArray(prop?.libraryTags) && prop.libraryTags.includes("background"));
+        const raceFolder = DiceCloudImporter.findTaggedProperty(properties, "race");
+        const backgroundFolder = DiceCloudImporter.findTaggedProperty(properties, "background");
 
         const featureProps = properties.filter((prop) => (
             prop?.type === "feature"
@@ -439,6 +439,11 @@ class DiceCloudImporter extends Application {
             candidates.add(noBracket);
         }
 
+        const noParens = trimmed.replace(/\s*\([^)]*\)\s*/g, " ").replace(/\s{2,}/g, " ").trim();
+        if (noParens && noParens !== trimmed) {
+            candidates.add(noParens);
+        }
+
         const colonParts = trimmed.split(":").map((part) => part.trim()).filter(Boolean);
         if (colonParts.length > 1) {
             colonParts.forEach((part) => candidates.add(part));
@@ -449,6 +454,37 @@ class DiceCloudImporter extends Application {
         }
 
         return Array.from(candidates);
+    }
+
+    static findTaggedProperty(properties, tag) {
+        if (!Array.isArray(properties)) {
+            return null;
+        }
+
+        const matches = properties.filter((prop) => {
+            if (!prop || prop?.inactive === true || prop?.deactivatedByAncestor === true) {
+                return false;
+            }
+            const tags = new Set();
+            if (Array.isArray(prop?.tags)) {
+                prop.tags.forEach((value) => tags.add(value));
+            }
+            if (Array.isArray(prop?.libraryTags)) {
+                prop.libraryTags.forEach((value) => tags.add(value));
+            }
+            return tags.has(tag);
+        });
+
+        if (matches.length === 0) {
+            return null;
+        }
+
+        const folderMatch = matches.find((prop) => prop?.type === "folder");
+        if (folderMatch) {
+            return folderMatch;
+        }
+
+        return matches[0];
     }
 
     static resolveDefaultCompendia(defaults) {
