@@ -1572,10 +1572,59 @@ class DiceCloudImporter extends Application {
             ["shield", {key: "shl", name: "Shields"}],
         ]);
 
-        const known_weapons = DiceCloudImporter.buildProficiencyMap("weapon", [
+        const weaponFallbackEntries = [
             ["simple", {key: "sim", name: "Simple Weapons"}],
             ["martial", {key: "mar", name: "Martial Weapons"}],
-        ]);
+        ];
+
+        const weaponFallbackList = [
+            { key: "club", name: "Club" },
+            { key: "dagger", name: "Dagger" },
+            { key: "greatclub", name: "Greatclub" },
+            { key: "handaxe", name: "Handaxe" },
+            { key: "javelin", name: "Javelin" },
+            { key: "lighthammer", name: "Light Hammer" },
+            { key: "mace", name: "Mace" },
+            { key: "quarterstaff", name: "Quarterstaff" },
+            { key: "sickle", name: "Sickle" },
+            { key: "spear", name: "Spear" },
+            { key: "dart", name: "Dart" },
+            { key: "shortbow", name: "Shortbow" },
+            { key: "sling", name: "Sling" },
+            { key: "lightcrossbow", name: "Light Crossbow" },
+            { key: "battleaxe", name: "Battleaxe" },
+            { key: "flail", name: "Flail" },
+            { key: "glaive", name: "Glaive" },
+            { key: "greataxe", name: "Greataxe" },
+            { key: "greatsword", name: "Greatsword" },
+            { key: "halberd", name: "Halberd" },
+            { key: "lance", name: "Lance" },
+            { key: "longsword", name: "Longsword" },
+            { key: "maul", name: "Maul" },
+            { key: "morningstar", name: "Morningstar" },
+            { key: "pike", name: "Pike" },
+            { key: "rapier", name: "Rapier" },
+            { key: "scimitar", name: "Scimitar" },
+            { key: "shortsword", name: "Shortsword" },
+            { key: "trident", name: "Trident" },
+            { key: "warpick", name: "War Pick" },
+            { key: "warhammer", name: "Warhammer" },
+            { key: "whip", name: "Whip" },
+            { key: "blowgun", name: "Blowgun" },
+            { key: "handcrossbow", name: "Hand Crossbow" },
+            { key: "heavycrossbow", name: "Heavy Crossbow" },
+            { key: "longbow", name: "Longbow" },
+            { key: "net", name: "Net" },
+        ];
+
+        weaponFallbackList.forEach((weapon) => {
+            const normalized = DiceCloudImporter.normalizeProficiencyValue(weapon.name, "weapon").lookup;
+            if (normalized) {
+                weaponFallbackEntries.push([normalized, { key: weapon.key, name: weapon.name }]);
+            }
+        });
+
+        const known_weapons = DiceCloudImporter.buildProficiencyMap("weapon", weaponFallbackEntries);
 
         const known_tools = DiceCloudImporter.buildProficiencyMap("tool", [
             ["artisan's tools", {key: "art", name: "Artisan's Tools"}],
