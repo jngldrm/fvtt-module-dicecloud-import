@@ -1,11 +1,12 @@
 <form class="dicecloud-import-settings-form">
-    <p>Select the compendiums that should be searched when importing spells and features.</p>
+    <p>Select the compendiums that should be searched when importing spells, features, subclasses, species, and backgrounds.</p>
     <table class="dicecloud-import-settings-table">
         <thead>
             <tr>
                 <th>Compendium</th>
                 <th>Spells</th>
                 <th>Features</th>
+                <th>Subclasses</th>
                 <th>Species</th>
                 <th>Backgrounds</th>
             </tr>
@@ -25,6 +26,9 @@
                             <input type="checkbox" name="featuresCompendia" value="{{collection}}" {{#if featureSelected}}checked{{/if}}>
                         </td>
                         <td class="centered">
+                            <input type="checkbox" name="subclassesCompendia" value="{{collection}}" {{#if subclassSelected}}checked{{/if}}>
+                        </td>
+                        <td class="centered">
                             <input type="checkbox" name="speciesCompendia" value="{{collection}}" {{#if speciesSelected}}checked{{/if}}>
                         </td>
                         <td class="centered">
@@ -34,7 +38,7 @@
                 {{/each}}
             {{else}}
                 <tr>
-                    <td colspan="5">No Item compendiums available.</td>
+                    <td colspan="6">No Item compendiums available.</td>
                 </tr>
             {{/if}}
         </tbody>
