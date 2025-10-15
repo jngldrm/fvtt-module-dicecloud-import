@@ -822,6 +822,14 @@ class DiceCloudImporter extends Application {
             }
         }
 
+        const ac = {
+            calc: "default",
+            value: null,
+        };
+        if (Number.isFinite(armor) && armor !== 10) {
+            ac.details = `DiceCloud AC ${armor}`;
+        }
+
         const hp = {
             value: 20,
             min: 0,
@@ -852,9 +860,7 @@ class DiceCloudImporter extends Application {
         }
 
         return {
-            ac: {
-                value: armor,
-            },
+            ac,
             death: {
                 success: 0,
                 failure: 0,
