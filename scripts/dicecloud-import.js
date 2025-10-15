@@ -309,6 +309,56 @@ class DiceCloudImporter extends Application {
         return "skill";
     }
 
+    static normalizeProficiencyValue(value, type) {
+        if (typeof value !== "string") {
+            return { lookup: "", display: "" };
+        }
+
+        let normalized = value.trim();
+        if (!normalized) {
+            return { lookup: "", display: "" };
+        }
+
+        normalized = normalized
+            .replace(/([a-z0-9])([A-Z])/g, "$1 $2") // split camelCase
+            .replace(/[_\-]+/g, " ") // normalise separators
+            .replace(/\s+/g, " ")
+            .trim();
+
+        let lower = normalized.toLowerCase();
+
+        switch (type) {
+            case "armor":
+                lower = lower.replace(/\barmou?r\b/g, "");
+                break;
+            case "weapon":
+                lower = lower.replace(/\bweapons?\b/g, "");
+                break;
+            case "language":
+                lower = lower.replace(/\blanguages?\b/g, "");
+                break;
+            default:
+                break;
+        }
+
+        lower = lower.replace(/\s+/g, " ").trim();
+
+        if (!lower) {
+            lower = normalized.toLowerCase();
+        }
+
+        const display = lower
+            .split(" ")
+            .filter(Boolean)
+            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(" ");
+
+        return {
+            lookup: lower,
+            display,
+        };
+    }
+
     static abilityValueFallback(parsedCharacter, stat) {
         if (parsedCharacter?.rawV2?.properties) {
             const abilityProp = parsedCharacter.rawV2.properties.find((prop) => prop?.variableName === stat);
@@ -1399,28 +1449,49 @@ class DiceCloudImporter extends Application {
             ? parsedCharacter.collections.proficiencies
             : [];
         const proficiencies = proficiencyCollection.filter(
-            prof => prof.type === type && prof.enabled
-        )
+            (prof) => prof.type === type && prof.enabled
+        );
 
-        const values = proficiencies.flatMap(prof => prof.name.split(", "));
+        const normalizedValues = [];
+        for (const prof of proficiencies) {
+            const parts = typeof prof.name === "string" ? prof.name.split(/,\s*/) : [];
+            for (const part of parts) {
+                const normalized = DiceCloudImporter.normalizeProficiencyValue(part, type);
+                if (normalized.lookup || normalized.display) {
+                    normalizedValues.push(normalized);
+                }
+            }
+        }
 
-        const known_values = values.filter(prof => known_proficiencies.has(prof.toLowerCase()));
-        const unknown_values = values.filter(prof => !known_proficiencies.has(prof.toLowerCase()));
-
+        const uniqueUnknown = new Map();
+        const processedKeys = new Set();
         const result = {
-            selected: {
-                custom1: unknown_values.join(", "),
-            },
-            custom: unknown_values.join(", "),
-            value: []
+            selected: {},
+            custom: "",
+            value: [],
+        };
+
+        for (const normalized of normalizedValues) {
+            const lookup = normalized.lookup;
+            if (lookup && known_proficiencies.has(lookup)) {
+                const known = known_proficiencies.get(lookup);
+                if (!processedKeys.has(known.key)) {
+                    processedKeys.add(known.key);
+                    result.value.push(known.key);
+                    result.selected[known.key] = known.name;
+                }
+            } else if (normalized.display) {
+                const key = normalized.display.toLowerCase();
+                if (!uniqueUnknown.has(key)) {
+                    uniqueUnknown.set(key, normalized.display);
+                }
+            }
         }
 
-        for (let value of known_values) {
-            const known_proficiency = known_proficiencies.get(value.toLowerCase());
-
-            result.value.push(known_proficiency.key);
-            result.selected[known_proficiency.key] = known_proficiency.name;
-        }
+        const customValues = Array.from(uniqueUnknown.values());
+        const customText = customValues.join(", ");
+        result.selected.custom1 = customText;
+        result.custom = customText;
 
         return result;
     }
@@ -1453,17 +1524,19 @@ class DiceCloudImporter extends Application {
             ["undercommon", {key: "undercommon", name: "Undercommon"}],
         ]);
 
-        const known_armor = new Map([
-            ["heavy armor", {key: "hvy", name: "Heavy Armor"}],
-            ["medium armor", {key: "med", name: "Medium Armor"}],
-            ["light armor", {key: "lgt", name: "Light Armor"}],
-            ["shields", {key: "shl", name: "Shields"}],
-        ]);
+        const known_armor = new Map();
+        [
+            { keys: ["heavy armor", "heavy"], value: {key: "hvy", name: "Heavy Armor"} },
+            { keys: ["medium armor", "medium"], value: {key: "med", name: "Medium Armor"} },
+            { keys: ["light armor", "light"], value: {key: "lgt", name: "Light Armor"} },
+            { keys: ["shields", "shield"], value: {key: "shl", name: "Shields"} },
+        ].forEach(({ keys, value }) => keys.forEach((key) => known_armor.set(key, value)));
 
-        const known_weapons = new Map([
-            ["simple weapons", {key: "sim", name: "Simple Weapons"}],
-            ["martial weapons", {key: "mar", name: "Martial Weapons"}],
-        ]);
+        const known_weapons = new Map();
+        [
+            { keys: ["simple weapons", "simple"], value: {key: "sim", name: "Simple Weapons"} },
+            { keys: ["martial weapons", "martial"], value: {key: "mar", name: "Martial Weapons"} },
+        ].forEach(({ keys, value }) => keys.forEach((key) => known_weapons.set(key, value)));
 
         const known_tools = new Map([
             ["artisan's tools", {key: "art", name: "Artisan's Tools"}],
