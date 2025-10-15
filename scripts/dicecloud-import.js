@@ -132,14 +132,23 @@ class DiceCloudImporter extends Application {
         for (const cls of classLevelProps) {
             const name = cls?.name ?? "";
             if (!name) continue;
-            const level = cls?.level ?? 0;
-            classTotals.set(name, (classTotals.get(name) ?? 0) + level);
+            const variable = cls?.variableName ?? name;
+            const level = Number(cls?.level ?? 0);
+            if (!Number.isFinite(level)) {
+                continue;
+            }
+            if (!classTotals.has(variable)) {
+                classTotals.set(variable, { name, level: 0 });
+            }
+            const entry = classTotals.get(variable);
+            entry.name = entry.name || name;
+            entry.level = Math.max(entry.level, level);
         }
-        const classes = Array.from(classTotals.entries()).map(([name, level], idx) => ({
+        const classes = Array.from(classTotals.values()).map((entry, idx) => ({
             _id: `class-${idx}`,
             charId,
-            name,
-            level,
+            name: entry.name,
+            level: entry.level,
         }));
 
         const spellListProps = properties.filter((prop) => prop?.type === "spellList");
