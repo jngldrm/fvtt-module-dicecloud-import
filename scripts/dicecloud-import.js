@@ -17,10 +17,10 @@ const Noop = () => undefined;
 class DiceCloudImporter extends Application {
     static moduleId = "dicecloud-import";
     static defaultSpellCompendia = [
-        "Dynamic-Effects-SRD.DAE SRD Midi-collection",
+        () => `world.ddb-${game.world.name}-spells`,
         "Dynamic-Effects-SRD.DAE SRD Spells",
         "dnd5e.spells",
-        () => `world.ddb-${game.world.name}-spells`,
+        "Dynamic-Effects-SRD.DAE SRD Midi-collection",
     ];
     static defaultFeatureCompendia = [
         "Dynamic-Effects-SRD.DAE SRD Feats",
@@ -1183,7 +1183,7 @@ class DiceCloudImporter extends Application {
 
     static async parseSpells(actor, parsedCharacter) {
         const defaultSpells = this.resolveDefaultCompendia(this.defaultSpellCompendia);
-        const spellPackIds = this.getCompendiumSetting("spellsCompendia", defaultSpells);
+        const spellPackIds = this.getCompendiumSetting("spellsCompendia", defaultSpells).slice(0, 3);
         const compendiums = await this.prepareCompendiums(spellPackIds);
 
         const spellSchoolTranslation = new Map([
@@ -1304,7 +1304,7 @@ class DiceCloudImporter extends Application {
         }
 
         const defaultSubclasses = this.resolveDefaultCompendia(this.defaultSubclassCompendia);
-        const subclassPackIds = this.getCompendiumSetting("subclassesCompendia", defaultSubclasses);
+        const subclassPackIds = this.getCompendiumSetting("subclassesCompendia", defaultSubclasses).slice(0, 3);
         const compendiums = await this.prepareCompendiums(subclassPackIds);
 
         for (const subclass of subclassCollection) {
@@ -1343,7 +1343,7 @@ class DiceCloudImporter extends Application {
 
     static async parseFeatures(actor, parsedCharacter) {
         const defaultFeatures = this.resolveDefaultCompendia(this.defaultFeatureCompendia);
-        const featurePackIds = this.getCompendiumSetting("featuresCompendia", defaultFeatures);
+        const featurePackIds = this.getCompendiumSetting("featuresCompendia", defaultFeatures).slice(0, 3);
         const compendiums = await this.prepareCompendiums(featurePackIds);
 
         const ignore_class_features = [
@@ -1406,7 +1406,7 @@ class DiceCloudImporter extends Application {
         }
 
         const defaultSpecies = this.resolveDefaultCompendia(this.defaultSpeciesCompendia);
-        const speciesPackIds = this.getCompendiumSetting("speciesCompendia", defaultSpecies);
+        const speciesPackIds = this.getCompendiumSetting("speciesCompendia", defaultSpecies).slice(0, 3);
         const compendiums = await this.prepareCompendiums(speciesPackIds);
 
         for (const species of speciesCollection) {
@@ -1450,7 +1450,7 @@ class DiceCloudImporter extends Application {
         }
 
         const defaultBackgrounds = this.resolveDefaultCompendia(this.defaultBackgroundCompendia);
-        const backgroundPackIds = this.getCompendiumSetting("backgroundsCompendia", defaultBackgrounds);
+        const backgroundPackIds = this.getCompendiumSetting("backgroundsCompendia", defaultBackgrounds).slice(0, 3);
         const compendiums = await this.prepareCompendiums(backgroundPackIds);
 
         for (const background of backgroundCollection) {
@@ -1844,68 +1844,82 @@ class DiceCloudImporterSettings extends FormApplication {
     }
 
     getData() {
-        const spellSelection = new Set(DiceCloudImporter.getCompendiumSetting(
-            "spellsCompendia",
-            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpellCompendia)
-        ));
-        const featureSelection = new Set(DiceCloudImporter.getCompendiumSetting(
-            "featuresCompendia",
-            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultFeatureCompendia)
-        ));
-        const subclassSelection = new Set(DiceCloudImporter.getCompendiumSetting(
-            "subclassesCompendia",
-            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSubclassCompendia)
-        ));
-        const speciesSelection = new Set(DiceCloudImporter.getCompendiumSetting(
-            "speciesCompendia",
-            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpeciesCompendia)
-        ));
-        const backgroundSelection = new Set(DiceCloudImporter.getCompendiumSetting(
-            "backgroundsCompendia",
-            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultBackgroundCompendia)
-        ));
-
-        const packs = Array.from(game.packs.values())
+        const availablePacks = Array.from(game.packs.values())
             .filter((pack) => pack.metadata?.type === "Item")
             .map((pack) => ({
                 collection: pack.collection,
                 title: pack.title ?? pack.metadata?.label ?? pack.collection,
-                metadata: pack.metadata,
-                spellSelected: spellSelection.has(pack.collection),
-                featureSelected: featureSelection.has(pack.collection),
-                subclassSelected: subclassSelection.has(pack.collection),
-                speciesSelected: speciesSelection.has(pack.collection),
-                backgroundSelected: backgroundSelection.has(pack.collection),
             }))
             .sort((a, b) => a.title.localeCompare(b.title));
 
+        const categories = [
+            {
+                key: "spellsCompendia",
+                label: "Spells",
+                defaults: DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpellCompendia),
+            },
+            {
+                key: "featuresCompendia",
+                label: "Features",
+                defaults: DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultFeatureCompendia),
+            },
+            {
+                key: "subclassesCompendia",
+                label: "Subclasses",
+                defaults: DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSubclassCompendia),
+            },
+            {
+                key: "speciesCompendia",
+                label: "Species",
+                defaults: DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpeciesCompendia),
+            },
+            {
+                key: "backgroundsCompendia",
+                label: "Backgrounds",
+                defaults: DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultBackgroundCompendia),
+            },
+        ].map((category) => {
+            const stored = DiceCloudImporter.getCompendiumSetting(category.key, category.defaults);
+            const normalized = Array.isArray(stored) ? stored.slice(0, 3) : [];
+            while (normalized.length < 3) {
+                normalized.push("");
+            }
+            const priorities = normalized.map((value, index) => ({
+                name: `${category.key}Priority${index + 1}`,
+                label: `Priority ${index + 1}`,
+                value,
+            }));
+            return {
+                key: category.key,
+                label: category.label,
+                priorities,
+            };
+        });
+
         return {
-            packs,
+            packs: availablePacks,
+            categories,
         };
     }
 
     async _updateObject(event, formData) {
-        const normalize = (value) => {
-            if (!value) {
-                return [];
+        const extractPriorities = (prefix) => {
+            const values = [];
+            for (let index = 1; index <= 3; index++) {
+                const key = `${prefix}Priority${index}`;
+                const value = formData[key];
+                if (typeof value === "string" && value.length > 0 && !values.includes(value)) {
+                    values.push(value);
+                }
             }
-            if (Array.isArray(value)) {
-                return value.filter(Boolean);
-            }
-            return [value];
+            return values;
         };
 
-        const spellPacks = normalize(formData.spellsCompendia);
-        const featurePacks = normalize(formData.featuresCompendia);
-        const subclassPacks = normalize(formData.subclassesCompendia);
-        const speciesPacks = normalize(formData.speciesCompendia);
-        const backgroundPacks = normalize(formData.backgroundsCompendia);
-
-        DiceCloudImporter.setCompendiumSetting("spellsCompendia", spellPacks);
-        DiceCloudImporter.setCompendiumSetting("featuresCompendia", featurePacks);
-        DiceCloudImporter.setCompendiumSetting("subclassesCompendia", subclassPacks);
-        DiceCloudImporter.setCompendiumSetting("speciesCompendia", speciesPacks);
-        DiceCloudImporter.setCompendiumSetting("backgroundsCompendia", backgroundPacks);
+        DiceCloudImporter.setCompendiumSetting("spellsCompendia", extractPriorities("spellsCompendia"));
+        DiceCloudImporter.setCompendiumSetting("featuresCompendia", extractPriorities("featuresCompendia"));
+        DiceCloudImporter.setCompendiumSetting("subclassesCompendia", extractPriorities("subclassesCompendia"));
+        DiceCloudImporter.setCompendiumSetting("speciesCompendia", extractPriorities("speciesCompendia"));
+        DiceCloudImporter.setCompendiumSetting("backgroundsCompendia", extractPriorities("backgroundsCompendia"));
 
         ui.notifications?.info?.("DiceCloud Import settings saved");
     }

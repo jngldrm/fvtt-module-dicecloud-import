@@ -1,44 +1,38 @@
 <form class="dicecloud-import-settings-form">
-    <p>Select the compendiums that should be searched when importing spells, features, subclasses, species, and backgrounds.</p>
+    <p>Select up to three compendiums per category. Searches run in priority order until a matching entry is found.</p>
     <table class="dicecloud-import-settings-table">
         <thead>
             <tr>
-                <th>Compendium</th>
-                <th>Spells</th>
-                <th>Features</th>
-                <th>Subclasses</th>
-                <th>Species</th>
-                <th>Backgrounds</th>
+                <th>Category</th>
+                <th>Priority 1</th>
+                <th>Priority 2</th>
+                <th>Priority 3</th>
             </tr>
         </thead>
         <tbody>
             {{#if packs.length}}
-                {{#each packs}}
+                {{#each categories}}
                     <tr>
                         <td>
-                            <strong>{{title}}</strong><br>
-                            <small>{{collection}}</small>
+                            <strong>{{label}}</strong>
                         </td>
-                        <td class="centered">
-                            <input type="checkbox" name="spellsCompendia" value="{{collection}}" {{#if spellSelected}}checked{{/if}}>
-                        </td>
-                        <td class="centered">
-                            <input type="checkbox" name="featuresCompendia" value="{{collection}}" {{#if featureSelected}}checked{{/if}}>
-                        </td>
-                        <td class="centered">
-                            <input type="checkbox" name="subclassesCompendia" value="{{collection}}" {{#if subclassSelected}}checked{{/if}}>
-                        </td>
-                        <td class="centered">
-                            <input type="checkbox" name="speciesCompendia" value="{{collection}}" {{#if speciesSelected}}checked{{/if}}>
-                        </td>
-                        <td class="centered">
-                            <input type="checkbox" name="backgroundsCompendia" value="{{collection}}" {{#if backgroundSelected}}checked{{/if}}>
-                        </td>
+                        {{#each priorities}}
+                            <td>
+                                <select name="{{name}}">
+                                    {{#select value}}
+                                        <option value="">— None —</option>
+                                        {{#each ../../packs}}
+                                            <option value="{{collection}}">{{title}}</option>
+                                        {{/each}}
+                                    {{/select}}
+                                </select>
+                            </td>
+                        {{/each}}
                     </tr>
                 {{/each}}
             {{else}}
                 <tr>
-                    <td colspan="6">No Item compendiums available.</td>
+                    <td colspan="4">No Item compendiums available.</td>
                 </tr>
             {{/if}}
         </tbody>

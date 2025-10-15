@@ -26,6 +26,10 @@ button.import-cd {
     vertical-align: top;
 }
 
+.dicecloud-import-settings-table select {
+    width: 100%;
+}
+
 .dicecloud-import-settings-table td.centered {
     text-align: center;
 }
