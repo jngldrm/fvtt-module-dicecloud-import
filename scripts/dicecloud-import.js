@@ -359,6 +359,47 @@ class DiceCloudImporter extends Application {
         };
     }
 
+    static getSystemProficiencyConfig(type) {
+        const config = typeof globalThis !== "undefined" ? globalThis.CONFIG : (typeof CONFIG !== "undefined" ? CONFIG : undefined);
+        const dnd5e = config?.DND5E;
+        if (!dnd5e) {
+            return null;
+        }
+
+        switch (type) {
+            case "armor":
+                return dnd5e.armorProficiencies ?? null;
+            case "weapon":
+                return dnd5e.weaponProficiencies ?? null;
+            case "tool":
+                return dnd5e.toolProficiencies ?? null;
+            case "language":
+                return dnd5e.languages ?? null;
+            default:
+                return null;
+        }
+    }
+
+    static buildProficiencyMap(type, fallbackEntries = []) {
+        const map = new Map(fallbackEntries);
+        const configEntries = this.getSystemProficiencyConfig(type);
+        if (configEntries && typeof configEntries === "object") {
+            for (const [key, label] of Object.entries(configEntries)) {
+                if (typeof label !== "string") {
+                    continue;
+                }
+                const normalized = this.normalizeProficiencyValue(label, type);
+                if (!normalized.lookup) {
+                    continue;
+                }
+                if (!map.has(normalized.lookup)) {
+                    map.set(normalized.lookup, { key, name: label });
+                }
+            }
+        }
+        return map;
+    }
+
     static abilityValueFallback(parsedCharacter, stat) {
         if (parsedCharacter?.rawV2?.properties) {
             const abilityProp = parsedCharacter.rawV2.properties.find((prop) => prop?.variableName === stat);
@@ -1497,7 +1538,7 @@ class DiceCloudImporter extends Application {
     }
 
     static parseTraits(parsedCharacter) {
-        const known_languages = new Map([
+        const known_languages = DiceCloudImporter.buildProficiencyMap("language", [
             ["aarakocra", {key: "aarakocra", name: "Aarakocra"}],
             ["aquan", {key: "aquan", name: "Aquan"}],
             ["auran", {key: "auran", name: "Auran"}],
@@ -1524,21 +1565,19 @@ class DiceCloudImporter extends Application {
             ["undercommon", {key: "undercommon", name: "Undercommon"}],
         ]);
 
-        const known_armor = new Map();
-        [
-            { keys: ["heavy armor", "heavy"], value: {key: "hvy", name: "Heavy Armor"} },
-            { keys: ["medium armor", "medium"], value: {key: "med", name: "Medium Armor"} },
-            { keys: ["light armor", "light"], value: {key: "lgt", name: "Light Armor"} },
-            { keys: ["shields", "shield"], value: {key: "shl", name: "Shields"} },
-        ].forEach(({ keys, value }) => keys.forEach((key) => known_armor.set(key, value)));
+        const known_armor = DiceCloudImporter.buildProficiencyMap("armor", [
+            ["heavy", {key: "hvy", name: "Heavy Armor"}],
+            ["medium", {key: "med", name: "Medium Armor"}],
+            ["light", {key: "lgt", name: "Light Armor"}],
+            ["shield", {key: "shl", name: "Shields"}],
+        ]);
 
-        const known_weapons = new Map();
-        [
-            { keys: ["simple weapons", "simple"], value: {key: "sim", name: "Simple Weapons"} },
-            { keys: ["martial weapons", "martial"], value: {key: "mar", name: "Martial Weapons"} },
-        ].forEach(({ keys, value }) => keys.forEach((key) => known_weapons.set(key, value)));
+        const known_weapons = DiceCloudImporter.buildProficiencyMap("weapon", [
+            ["simple", {key: "sim", name: "Simple Weapons"}],
+            ["martial", {key: "mar", name: "Martial Weapons"}],
+        ]);
 
-        const known_tools = new Map([
+        const known_tools = DiceCloudImporter.buildProficiencyMap("tool", [
             ["artisan's tools", {key: "art", name: "Artisan's Tools"}],
             ["disguise kit", {key: "disg", name: "Disguise Kit"}],
             ["forgery kit", {key: "forg", name: "Forgery Kit"}],
