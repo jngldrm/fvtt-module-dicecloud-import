@@ -163,7 +163,11 @@ class DiceCloudImporter extends Application {
             prepared: spell?.alwaysPrepared ? "always" : (spell?.prepared ? "prepared" : "unprepared"),
         }));
 
-        const featureProps = properties.filter((prop) => prop?.type === "feature");
+        const featureProps = properties.filter((prop) => (
+            prop?.type === "feature"
+            && prop?.inactive !== true
+            && prop?.deactivatedByAncestor !== true
+        ));
         const features = featureProps.map((feature) => ({
             _id: feature?._id,
             charId,
@@ -250,6 +254,159 @@ class DiceCloudImporter extends Application {
         ["wisdom", "wis"],
         ["charisma", "cha"],
     ]);
+
+    static parseSpellDuration(durationText) {
+        if (typeof durationText !== "string") {
+            return {};
+        }
+
+        const clean = durationText.trim();
+        if (!clean) {
+            return {};
+        }
+
+        const lower = clean.toLowerCase();
+
+        if (clean.includes("{")) {
+            return { units: "spec", special: clean };
+        }
+
+        if (lower.includes("instant")) {
+            return { units: "inst" };
+        }
+
+        if (lower.includes("until dispelled") || lower.includes("permanent")) {
+            return { units: "perm" };
+        }
+
+        const durationUnits = new Map([
+            ["round", "round"],
+            ["rounds", "round"],
+            ["turn", "turn"],
+            ["turns", "turn"],
+            ["minute", "minute"],
+            ["minutes", "minute"],
+            ["hour", "hour"],
+            ["hours", "hour"],
+            ["day", "day"],
+            ["days", "day"],
+            ["month", "month"],
+            ["months", "month"],
+            ["year", "year"],
+            ["years", "year"],
+        ]);
+
+        const digitsMatch = clean.match(/([0-9]+(?:\.[0-9]+)?)/);
+        if (!digitsMatch) {
+            return { units: "spec", special: clean };
+        }
+
+        const value = Number(digitsMatch[1]);
+        if (!Number.isFinite(value)) {
+            return { units: "spec", special: clean };
+        }
+
+        const unitText = lower.slice(digitsMatch.index + digitsMatch[0].length).trim();
+        const unitMatch = unitText.match(/^(rounds?|turns?|minutes?|hours?|days?|months?|years?)/);
+
+        if (!unitMatch) {
+            return { units: "spec", special: clean };
+        }
+
+        const units = durationUnits.get(unitMatch[1]);
+        if (!units) {
+            return { units: "spec", special: clean };
+        }
+
+        return { value, units };
+    }
+
+    static parseSpellRange(rangeText) {
+        if (typeof rangeText !== "string") {
+            return {};
+        }
+
+        const clean = rangeText.trim();
+        if (!clean) {
+            return {};
+        }
+
+        const lower = clean.toLowerCase();
+
+        if (clean.includes("{")) {
+            return { units: "spec", special: clean };
+        }
+
+        if (lower === "self") {
+            return { units: "self" };
+        }
+
+        if (lower.startsWith("self")) {
+            return { units: "self", special: clean };
+        }
+
+        if (lower === "touch") {
+            return { units: "touch" };
+        }
+
+        if (lower.startsWith("touch")) {
+            return { units: "touch", special: clean };
+        }
+
+        if (lower === "none") {
+            return { units: "none" };
+        }
+
+        if (lower.includes("sight")) {
+            return { units: "spec", special: clean };
+        }
+
+        const digitsMatch = clean.match(/([0-9]+(?:\.[0-9]+)?)/);
+        if (!digitsMatch) {
+            return { units: "spec", special: clean };
+        }
+
+        const value = Number(digitsMatch[1]);
+        if (!Number.isFinite(value)) {
+            return { units: "spec", special: clean };
+        }
+
+        let units = "ft";
+        if (lower.includes("mile")) {
+            units = "mi";
+        }
+
+        return { value, units };
+    }
+
+    static featureNameCandidates(name) {
+        if (typeof name !== "string") {
+            return [];
+        }
+
+        const trimmed = name.trim();
+        if (!trimmed) {
+            return [];
+        }
+
+        const candidates = new Set([trimmed]);
+
+        const noBracket = trimmed.replace(/\s*\[[^\]]+\]\s*$/, "").trim();
+        if (noBracket) {
+            candidates.add(noBracket);
+        }
+
+        const colonParts = trimmed.split(":").map((part) => part.trim()).filter(Boolean);
+        if (colonParts.length > 1) {
+            colonParts.forEach((part) => candidates.add(part));
+            const afterFirst = colonParts.slice(1).join(": ").trim();
+            if (afterFirst) {
+                candidates.add(afterFirst);
+            }
+        }
+
+        return Array.from(candidates);
+    }
 
     static get defaultOptions() {
         const options = super.defaultOptions;
@@ -700,21 +857,8 @@ class DiceCloudImporter extends Application {
                 const createdSpells = await actor.createEmbeddedDocuments("Item", [spellData]);
                 entity = createdSpells[0];
             } else {
-                let range = {};
-                if (typeof spell.range === "string") {
-                    if (spell.range.toLowerCase() === "touch") {
-                        range.units = "touch";
-                    } else {
-                        range.value = spell.range;
-                    }
-                }
-
-                let duration = {};
-                if (typeof spell.duration === "string" && spell.duration.toLowerCase() === "instantaneous") {
-                    duration.units = "inst";
-                } else if (spell.duration) {
-                    duration.value = spell.duration;
-                }
+                const range = DiceCloudImporter.parseSpellRange(spell.range);
+                const duration = DiceCloudImporter.parseSpellDuration(spell.duration);
 
                 let school = spellSchoolTranslation.has(spell.school) ?
                     spellSchoolTranslation.get(spell.school) : spell.school;
@@ -830,7 +974,14 @@ class DiceCloudImporter extends Application {
                 })
             }
 
-            let srd_item = await this.findInCompendiums(compendiums, feature.name);
+            let srd_item = null;
+            const nameCandidates = DiceCloudImporter.featureNameCandidates(feature.name);
+            for (const candidate of nameCandidates) {
+                srd_item = await this.findInCompendiums(compendiums, candidate);
+                if (srd_item) {
+                    break;
+                }
+            }
 
             if (srd_item) {
                 const featureData = srd_item.toObject();
