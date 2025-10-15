@@ -4,8 +4,10 @@
         <thead>
             <tr>
                 <th>Compendium</th>
-                <th>Use for Spells</th>
-                <th>Use for Features</th>
+                <th>Spells</th>
+                <th>Features</th>
+                <th>Species</th>
+                <th>Backgrounds</th>
             </tr>
         </thead>
         <tbody>
@@ -22,11 +24,17 @@
                         <td class="centered">
                             <input type="checkbox" name="featuresCompendia" value="{{collection}}" {{#if featureSelected}}checked{{/if}}>
                         </td>
+                        <td class="centered">
+                            <input type="checkbox" name="speciesCompendia" value="{{collection}}" {{#if speciesSelected}}checked{{/if}}>
+                        </td>
+                        <td class="centered">
+                            <input type="checkbox" name="backgroundsCompendia" value="{{collection}}" {{#if backgroundSelected}}checked{{/if}}>
+                        </td>
                     </tr>
                 {{/each}}
             {{else}}
                 <tr>
-                    <td colspan="3">No Item compendiums available.</td>
+                    <td colspan="5">No Item compendiums available.</td>
                 </tr>
             {{/if}}
         </tbody>

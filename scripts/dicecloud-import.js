@@ -27,6 +27,16 @@ class DiceCloudImporter extends Application {
         "dnd5e.classfeatures",
         "dnd5e.races",
     ];
+    static defaultSpeciesCompendia = [
+        "dnd5e.races",
+        "Dynamic-Effects-SRD.DAE SRD Races",
+        () => `world.ddb-${game.world.name}-races`,
+    ];
+    static defaultBackgroundCompendia = [
+        "dnd5e.backgrounds",
+        "Dynamic-Effects-SRD.DAE SRD Backgrounds",
+        () => `world.ddb-${game.world.name}-backgrounds`,
+    ];
 
     static normalizeCharacter(rawCharacter) {
         if (rawCharacter?.character && rawCharacter?.collections) {
@@ -176,6 +186,9 @@ class DiceCloudImporter extends Application {
             prepared: spell?.alwaysPrepared ? "always" : (spell?.prepared ? "prepared" : "unprepared"),
         }));
 
+        const raceFolder = properties.find((prop) => Array.isArray(prop?.libraryTags) && prop.libraryTags.includes("race"));
+        const backgroundFolder = properties.find((prop) => Array.isArray(prop?.libraryTags) && prop.libraryTags.includes("background"));
+
         const featureProps = properties.filter((prop) => (
             prop?.type === "feature"
             && prop?.inactive !== true
@@ -188,6 +201,20 @@ class DiceCloudImporter extends Application {
             description: feature?.description?.value ?? feature?.summary?.value ?? "",
         }));
 
+        const species = raceFolder ? [{
+            _id: raceFolder._id,
+            charId,
+            name: raceFolder.name ?? "",
+            description: raceFolder?.description?.value ?? raceFolder?.description?.text ?? "",
+        }] : [];
+
+        const backgrounds = backgroundFolder ? [{
+            _id: backgroundFolder._id,
+            charId,
+            name: backgroundFolder.name ?? "",
+            description: backgroundFolder?.description?.value ?? backgroundFolder?.description?.text ?? "",
+        }] : [];
+
         const character = {
             _id: charId,
             name: archive?.creature?.name ?? "DiceCloud Import",
@@ -199,8 +226,9 @@ class DiceCloudImporter extends Application {
             bonds: "",
             flaws: "",
             ideals: "",
-            race: "",
+            race: raceFolder?.name ?? "",
             personality: "",
+            background: backgroundFolder?.name ?? "",
             hitPoints: {
                 adjustment: hitPointAdjustment,
             },
@@ -219,6 +247,8 @@ class DiceCloudImporter extends Application {
                 spells,
                 classes,
                 features,
+                species,
+                backgrounds,
             },
             rawV2: archive,
         };
@@ -435,6 +465,8 @@ class DiceCloudImporter extends Application {
         const defaults = {
             spellsCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultSpellCompendia)),
             featuresCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultFeatureCompendia)),
+            speciesCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultSpeciesCompendia)),
+            backgroundsCompendia: JSON.stringify(this.resolveDefaultCompendia(this.defaultBackgroundCompendia)),
         };
 
         for (const [key, defaultValue] of Object.entries(defaults)) {
@@ -723,7 +755,7 @@ class DiceCloudImporter extends Application {
         return {
             alignment: this.stripMarkdownLinks(parsedCharacter.character.alignment),
             appearance: "",
-            background: this.stripMarkdownLinks(parsedCharacter.character.backstory),
+            background: this.stripMarkdownLinks(parsedCharacter.character.background ?? ""),
             biography: {
                 value: this.markdownToHTML(parsedCharacter.character.description),
             },
@@ -1072,6 +1104,94 @@ class DiceCloudImporter extends Application {
         }
     }
 
+    static async parseSpecies(actor, parsedCharacter) {
+        const speciesCollection = Array.isArray(parsedCharacter.collections?.species)
+            ? parsedCharacter.collections.species
+            : [];
+        if (speciesCollection.length === 0) {
+            return;
+        }
+
+        const defaultSpecies = this.resolveDefaultCompendia(this.defaultSpeciesCompendia);
+        const speciesPackIds = this.getCompendiumSetting("speciesCompendia", defaultSpecies);
+        const compendiums = await this.prepareCompendiums(speciesPackIds);
+
+        for (const species of speciesCollection) {
+            if (!species?.name) {
+                continue;
+            }
+
+            let srd_item = null;
+            const nameCandidates = DiceCloudImporter.featureNameCandidates(species.name);
+            for (const candidate of nameCandidates) {
+                srd_item = await this.findInCompendiums(compendiums, candidate);
+                if (srd_item) {
+                    break;
+                }
+            }
+
+            if (srd_item) {
+                const itemData = srd_item.toObject();
+                delete itemData._id;
+                await actor.createEmbeddedDocuments("Item", [itemData]);
+            } else {
+                await actor.createEmbeddedDocuments("Item", [{
+                    type: "race",
+                    name: species.name,
+                    system: {
+                        description: {
+                            value: this.markdownToHTML(species.description || ""),
+                        },
+                    },
+                }]);
+            }
+        }
+    }
+
+    static async parseBackgrounds(actor, parsedCharacter) {
+        const backgroundCollection = Array.isArray(parsedCharacter.collections?.backgrounds)
+            ? parsedCharacter.collections.backgrounds
+            : [];
+        if (backgroundCollection.length === 0) {
+            return;
+        }
+
+        const defaultBackgrounds = this.resolveDefaultCompendia(this.defaultBackgroundCompendia);
+        const backgroundPackIds = this.getCompendiumSetting("backgroundsCompendia", defaultBackgrounds);
+        const compendiums = await this.prepareCompendiums(backgroundPackIds);
+
+        for (const background of backgroundCollection) {
+            if (!background?.name) {
+                continue;
+            }
+
+            let srd_item = null;
+            const nameCandidates = DiceCloudImporter.featureNameCandidates(background.name);
+            for (const candidate of nameCandidates) {
+                srd_item = await this.findInCompendiums(compendiums, candidate);
+                if (srd_item) {
+                    break;
+                }
+            }
+
+            if (srd_item) {
+                const itemData = srd_item.toObject();
+                delete itemData._id;
+                await actor.createEmbeddedDocuments("Item", [itemData]);
+            } else {
+                await actor.createEmbeddedDocuments("Item", [{
+                    type: "background",
+                    name: background.name,
+                    system: {
+                        description: {
+                            value: this.markdownToHTML(background.description || ""),
+                        },
+                    },
+                }]);
+            }
+        }
+    }
+
     static parseProficiencies(parsedCharacter, type, known_proficiencies) {
         const proficiencyCollection = Array.isArray(parsedCharacter.collections?.proficiencies)
             ? parsedCharacter.collections.proficiencies
@@ -1187,6 +1307,8 @@ class DiceCloudImporter extends Application {
             }
             await DiceCloudImporter.parseLevels(actor, parsedCharacter);
             await DiceCloudImporter.parseSpells(actor, parsedCharacter);
+            await DiceCloudImporter.parseSpecies(actor, parsedCharacter);
+            await DiceCloudImporter.parseBackgrounds(actor, parsedCharacter);
             await DiceCloudImporter.parseFeatures(actor, parsedCharacter);
         } catch (e) {
             console.error(e);
@@ -1366,6 +1488,14 @@ class DiceCloudImporterSettings extends FormApplication {
             "featuresCompendia",
             DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultFeatureCompendia)
         ));
+        const speciesSelection = new Set(DiceCloudImporter.getCompendiumSetting(
+            "speciesCompendia",
+            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultSpeciesCompendia)
+        ));
+        const backgroundSelection = new Set(DiceCloudImporter.getCompendiumSetting(
+            "backgroundsCompendia",
+            DiceCloudImporter.resolveDefaultCompendia(DiceCloudImporter.defaultBackgroundCompendia)
+        ));
 
         const packs = Array.from(game.packs.values())
             .filter((pack) => pack.metadata?.type === "Item")
@@ -1375,6 +1505,8 @@ class DiceCloudImporterSettings extends FormApplication {
                 metadata: pack.metadata,
                 spellSelected: spellSelection.has(pack.collection),
                 featureSelected: featureSelection.has(pack.collection),
+                speciesSelected: speciesSelection.has(pack.collection),
+                backgroundSelected: backgroundSelection.has(pack.collection),
             }))
             .sort((a, b) => a.title.localeCompare(b.title));
 
@@ -1396,9 +1528,13 @@ class DiceCloudImporterSettings extends FormApplication {
 
         const spellPacks = normalize(formData.spellsCompendia);
         const featurePacks = normalize(formData.featuresCompendia);
+        const speciesPacks = normalize(formData.speciesCompendia);
+        const backgroundPacks = normalize(formData.backgroundsCompendia);
 
         DiceCloudImporter.setCompendiumSetting("spellsCompendia", spellPacks);
         DiceCloudImporter.setCompendiumSetting("featuresCompendia", featurePacks);
+        DiceCloudImporter.setCompendiumSetting("speciesCompendia", speciesPacks);
+        DiceCloudImporter.setCompendiumSetting("backgroundsCompendia", backgroundPacks);
 
         ui.notifications?.info?.("DiceCloud Import settings saved");
     }
